@@ -11,16 +11,16 @@ import java.util.Map;
 /**
  * StarRocks 备份与恢复统一入口控制器
  * 
- * 入参结构：
+ * 入参结构（Java 8 命名规范）：
  * {
- *   "方法名": "备份与恢复表",
- *   "参数": {
- *     "备份机房id": "ht",
- *     "恢复机房id": "db", 
- *     "数据库名": "lmp_label",
- *     "表名": "table1",
+ *   "methodName": "backupAndRestore",
+ *   "params": {
+ *     "backupClusterId": "ht",
+ *     "restoreClusterId": "db",
+ *     "databaseName": "lmp_label",
+ *     "tableName": "table1",
  *     "byPartition": true,
- *     "分区名": "p20260315"
+ *     "partitionName": "p20260315"
  *   }
  * }
  */
@@ -40,54 +40,54 @@ public class StarRocksBackupController {
      */
     @PostMapping("/execute")
     public JSONObject execute(@RequestBody Map<String, Object> request) {
-        String methodName = (String) request.get("方法名");
-        Map<String, Object> params = (Map<String, Object>) request.get("参数");
+        String methodName = (String) request.get("methodName");
+        Map<String, Object> params = (Map<String, Object>) request.get("params");
         
         if (methodName == null || methodName.isEmpty()) {
-            return errorResponse("方法名 不能为空");
+            return errorResponse("methodName cannot be empty");
         }
         if (params == null) {
-            return errorResponse("参数 不能为空");
+            return errorResponse("params cannot be empty");
         }
 
-        log.info("执行方法: {}, 参数: {}", methodName, params);
+        log.info("Execute method: {}, params: {}", methodName, params);
 
         try {
             switch (methodName) {
                 // 仓库管理
-                case "创建HDFS仓库":
+                case "createRepository":
                     return backupService.createRepository(params);
-                case "显示仓库列表":
+                case "showRepositories":
                     return backupService.showRepositories(params);
 
                 // 表管理
-                case "显示表":
+                case "showTables":
                     return backupService.showTables(params);
 
                 // 备份管理
-                case "备份表":
+                case "backupTable":
                     return backupService.backupTable(params);
-                case "查看备份进度":
+                case "showBackup":
                     return backupService.showBackup(params);
-                case "查看备份快照":
+                case "showSnapshot":
                     return backupService.showSnapshot(params);
 
                 // 恢复管理
-                case "恢复快照":
+                case "restoreSnapshot":
                     return backupService.restoreSnapshot(params);
-                case "查看恢复进度":
+                case "showRestore":
                     return backupService.showRestore(params);
 
                 // 整合方法
-                case "备份与恢复表":
+                case "backupAndRestore":
                     return backupService.backupAndRestore(params);
 
                 default:
-                    return errorResponse("未知的方法: " + methodName);
+                    return errorResponse("Unknown method: " + methodName);
             }
         } catch (Exception e) {
-            log.error("执行方法 {} 失败: {}", methodName, e.getMessage(), e);
-            return errorResponse("执行失败: " + e.getMessage());
+            log.error("Execute method {} failed: {}", methodName, e.getMessage(), e);
+            return errorResponse("Execution failed: " + e.getMessage());
         }
     }
 
@@ -98,7 +98,7 @@ public class StarRocksBackupController {
     public JSONObject health() {
         JSONObject result = new JSONObject();
         result.put("code", 200);
-        result.put("message", "服务正常");
+        result.put("message", "Service is running");
         result.put("timestamp", System.currentTimeMillis());
         return result;
     }

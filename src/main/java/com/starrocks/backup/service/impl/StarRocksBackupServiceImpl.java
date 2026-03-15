@@ -16,13 +16,13 @@ import java.util.Map;
 /**
  * StarRocks 备份与恢复服务实现
  * 
- * 参数说明：
- * - 备份机房id: 源集群标识，如 "ht"
- * - 恢复机房id: 目标集群标识，如 "db"
- * - 数据库名: 数据库名称，如 "lmp_label"
- * - 表名: 表名称，如 "table1"
+ * 参数说明（Java 8 命名规范）：
+ * - backupClusterId: 源集群标识，如 "ht"
+ * - restoreClusterId: 目标集群标识，如 "db"
+ * - databaseName: 数据库名称，如 "lmp_label"
+ * - tableName: 表名称，如 "table1"
  * - byPartition: 是否按分区备份，true/false
- * - 分区名: 分区名称，如 "p20260315"
+ * - partitionName: 分区名称，支持 String 或 List<String>
  */
 @Slf4j
 @Service
@@ -33,26 +33,25 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
 
     // ==================== 参数解析工具方法 ====================
 
-    private String getParam(Map<String, Object> params, String key, String defaultValue) {
+    private String getStringParam(Map<String, Object> params, String key, String defaultValue) {
         Object value = params.get(key);
         return value != null ? value.toString() : defaultValue;
     }
 
-    private String getParam(Map<String, Object> params, String key) {
-        return getParam(params, key, null);
+    private String getStringParam(Map<String, Object> params, String key) {
+        return getStringParam(params, key, null);
     }
 
-    private List<String> getPartitions(Map<String, Object> params) {
+    @SuppressWarnings("unchecked")
+    private List<String> getPartitionNames(Map<String, Object> params) {
         List<String> partitions = new ArrayList<>();
         
-        // 支持单分区或多分区
-        Object partitionObj = params.get("分区名");
+        Object partitionObj = params.get("partitionName");
         if (partitionObj instanceof List) {
             partitions = (List<String>) partitionObj;
         } else if (partitionObj instanceof String) {
             String partitionStr = (String) partitionObj;
             if (!partitionStr.isEmpty()) {
-                // 支持逗号分隔的多分区
                 for (String p : partitionStr.split(",")) {
                     partitions.add(p.trim());
                 }
@@ -76,32 +75,32 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
     public JSONObject createRepository(Map<String, Object> params) {
         JSONObject result = new JSONObject();
         
-        String repoName = getParam(params, "仓库名");
-        String location = getParam(params, "HDFS路径");
-        String broker = getParam(params, "broker名", "hdfs_broker");
-        String username = getParam(params, "用户名");
-        String password = getParam(params, "密码");
+        String repoName = getStringParam(params, "repoName");
+        String hdfsPath = getStringParam(params, "hdfsPath");
+        String brokerName = getStringParam(params, "brokerName", "hdfs_broker");
+        String username = getStringParam(params, "username");
+        String password = getStringParam(params, "password");
 
-        if (repoName == null || location == null) {
-            return errorResponse("仓库名 和 HDFS路径 不能为空");
+        if (repoName == null || hdfsPath == null) {
+            return errorResponse("repoName and hdfsPath cannot be empty");
         }
 
         try {
             String sql = String.format(
                 "CREATE REPOSITORY `%s` WITH BROKER `%s` ON LOCATION \"%s\" PROPERTIES (\"username\"=\"%s\",\"password\"=\"%s\")",
-                repoName, broker, location, username, password
+                repoName, brokerName, hdfsPath, username, password
             );
 
-            log.info("执行SQL: {}", sql);
+            log.info("Execute SQL: {}", sql);
             jdbcTemplate.execute(sql);
 
             result.put("code", 200);
-            result.put("message", "仓库创建成功");
-            result.put("仓库名", repoName);
+            result.put("message", "Repository created successfully");
+            result.put("repoName", repoName);
         } catch (Exception e) {
-            log.error("创建仓库失败: {}", e.getMessage(), e);
+            log.error("Create repository failed: {}", e.getMessage(), e);
             result.put("code", 500);
-            result.put("message", "创建仓库失败: " + e.getMessage());
+            result.put("message", "Create repository failed: " + e.getMessage());
         }
 
         return result;
@@ -115,12 +114,12 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
             List<Map<String, Object>> list = jdbcTemplate.queryForList("SHOW REPOSITORIES");
             
             result.put("code", 200);
-            result.put("message", "查询成功");
+            result.put("message", "Query successful");
             result.put("data", list);
             result.put("total", list.size());
         } catch (Exception e) {
-            log.error("查询仓库失败: {}", e.getMessage(), e);
-            return errorResponse("查询失败: " + e.getMessage());
+            log.error("Query repositories failed: {}", e.getMessage(), e);
+            return errorResponse("Query failed: " + e.getMessage());
         }
 
         return result;
@@ -132,20 +131,20 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
     public JSONObject showTables(Map<String, Object> params) {
         JSONObject result = new JSONObject();
         
-        String database = getParam(params, "数据库名", "default_cluster");
+        String databaseName = getStringParam(params, "databaseName", "default_cluster");
 
         try {
-            String sql = "SHOW TABLES FROM " + database;
+            String sql = "SHOW TABLES FROM " + databaseName;
             List<Map<String, Object>> list = jdbcTemplate.queryForList(sql);
             
             result.put("code", 200);
-            result.put("message", "查询成功");
-            result.put("数据库名", database);
+            result.put("message", "Query successful");
+            result.put("databaseName", databaseName);
             result.put("data", list);
             result.put("total", list.size());
         } catch (Exception e) {
-            log.error("查询表失败: {}", e.getMessage(), e);
-            return errorResponse("查询失败: " + e.getMessage());
+            log.error("Query tables failed: {}", e.getMessage(), e);
+            return errorResponse("Query failed: " + e.getMessage());
         }
 
         return result;
@@ -158,55 +157,52 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
     public JSONObject backupTable(Map<String, Object> params) {
         JSONObject result = new JSONObject();
         
-        String database = getParam(params, "数据库名");
-        String tableName = getParam(params, "表名");
-        String repoName = getParam(params, "仓库名");
-        String snapshotName = getParam(params, "快照名");
+        String databaseName = getStringParam(params, "databaseName");
+        String tableName = getStringParam(params, "tableName");
+        String repoName = getStringParam(params, "repoName");
+        String snapshotName = getStringParam(params, "snapshotName");
         
-        // 分区相关
         boolean byPartition = isByPartition(params);
-        List<String> partitions = getPartitions(params);
+        List<String> partitionNames = getPartitionNames(params);
 
-        if (database == null || tableName == null || repoName == null) {
-            return errorResponse("数据库名、表名、仓库名 不能为空");
+        if (databaseName == null || tableName == null || repoName == null) {
+            return errorResponse("databaseName, tableName, repoName cannot be empty");
         }
 
-        // 自动生成快照名
         if (snapshotName == null || snapshotName.isEmpty()) {
-            snapshotName = String.format("%s_%s_%d", database, tableName, System.currentTimeMillis());
+            snapshotName = String.format("%s_%s_%d", databaseName, tableName, System.currentTimeMillis());
         }
 
         try {
             StringBuilder sql = new StringBuilder();
-            sql.append("BACKUP SNAPSHOT ").append(database).append(".").append(snapshotName);
+            sql.append("BACKUP SNAPSHOT ").append(databaseName).append(".").append(snapshotName);
             sql.append(" TO `").append(repoName).append("` ");
             sql.append("ON (").append(tableName);
             
-            // 如果按分区备份且指定了分区
-            if (byPartition && !partitions.isEmpty()) {
+            if (byPartition && !partitionNames.isEmpty()) {
                 sql.append(" PARTITION (");
-                for (int i = 0; i < partitions.size(); i++) {
+                for (int i = 0; i < partitionNames.size(); i++) {
                     if (i > 0) sql.append(", ");
-                    sql.append(partitions.get(i));
+                    sql.append(partitionNames.get(i));
                 }
                 sql.append(")");
             }
             
             sql.append(")");
 
-            log.info("执行备份SQL: {}", sql);
+            log.info("Execute backup SQL: {}", sql);
             jdbcTemplate.execute(sql.toString());
 
             result.put("code", 200);
-            result.put("message", "备份任务已提交");
-            result.put("快照名", snapshotName);
-            result.put("数据库名", database);
-            result.put("表名", tableName);
+            result.put("message", "Backup task submitted");
+            result.put("snapshotName", snapshotName);
+            result.put("databaseName", databaseName);
+            result.put("tableName", tableName);
             result.put("byPartition", byPartition);
-            result.put("分区名", partitions);
+            result.put("partitionName", partitionNames);
         } catch (Exception e) {
-            log.error("备份失败: {}", e.getMessage(), e);
-            return errorResponse("备份失败: " + e.getMessage());
+            log.error("Backup failed: {}", e.getMessage(), e);
+            return errorResponse("Backup failed: " + e.getMessage());
         }
 
         return result;
@@ -216,20 +212,20 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
     public JSONObject showBackup(Map<String, Object> params) {
         JSONObject result = new JSONObject();
         
-        String database = getParam(params, "数据库名");
-        String sql = (database != null && !database.isEmpty()) 
-            ? "SHOW BACKUP FROM " + database 
+        String databaseName = getStringParam(params, "databaseName");
+        String sql = (databaseName != null && !databaseName.isEmpty()) 
+            ? "SHOW BACKUP FROM " + databaseName 
             : "SHOW BACKUP";
 
         try {
             List<Map<String, Object>> list = jdbcTemplate.queryForList(sql);
             
             result.put("code", 200);
-            result.put("message", "查询成功");
+            result.put("message", "Query successful");
             result.put("data", list);
         } catch (Exception e) {
-            log.error("查询备份进度失败: {}", e.getMessage(), e);
-            return errorResponse("查询失败: " + e.getMessage());
+            log.error("Query backup progress failed: {}", e.getMessage(), e);
+            return errorResponse("Query failed: " + e.getMessage());
         }
 
         return result;
@@ -239,11 +235,11 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
     public JSONObject showSnapshot(Map<String, Object> params) {
         JSONObject result = new JSONObject();
         
-        String repoName = getParam(params, "仓库名");
-        String snapshotName = getParam(params, "快照名");
+        String repoName = getStringParam(params, "repoName");
+        String snapshotName = getStringParam(params, "snapshotName");
 
         if (repoName == null) {
-            return errorResponse("仓库名 不能为空");
+            return errorResponse("repoName cannot be empty");
         }
 
         try {
@@ -256,11 +252,11 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
             List<Map<String, Object>> list = jdbcTemplate.queryForList(sql.toString());
             
             result.put("code", 200);
-            result.put("message", "查询成功");
+            result.put("message", "Query successful");
             result.put("data", list);
         } catch (Exception e) {
-            log.error("查询快照失败: {}", e.getMessage(), e);
-            return errorResponse("查询失败: " + e.getMessage());
+            log.error("Query snapshot failed: {}", e.getMessage(), e);
+            return errorResponse("Query failed: " + e.getMessage());
         }
 
         return result;
@@ -273,25 +269,24 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
     public JSONObject restoreSnapshot(Map<String, Object> params) {
         JSONObject result = new JSONObject();
         
-        String database = getParam(params, "数据库名");
-        String snapshotName = getParam(params, "快照名");
-        String repoName = getParam(params, "仓库名");
-        String tableName = getParam(params, "表名");
-        String newTableName = getParam(params, "新表名");
-        String backupTimestamp = getParam(params, "备份时间戳");
-        String targetCluster = getParam(params, "恢复机房id");
+        String databaseName = getStringParam(params, "databaseName");
+        String snapshotName = getStringParam(params, "snapshotName");
+        String repoName = getStringParam(params, "repoName");
+        String tableName = getStringParam(params, "tableName");
+        String newTableName = getStringParam(params, "newTableName");
+        String backupTimestamp = getStringParam(params, "backupTimestamp");
+        String restoreClusterId = getStringParam(params, "restoreClusterId");
 
-        if (database == null || snapshotName == null || repoName == null || tableName == null) {
-            return errorResponse("数据库名、快照名、仓库名、表名 不能为空");
+        if (databaseName == null || snapshotName == null || repoName == null || tableName == null) {
+            return errorResponse("databaseName, snapshotName, repoName, tableName cannot be empty");
         }
 
         try {
             StringBuilder sql = new StringBuilder();
-            sql.append("RESTORE SNAPSHOT ").append(database).append(".").append(snapshotName);
+            sql.append("RESTORE SNAPSHOT ").append(databaseName).append(".").append(snapshotName);
             sql.append(" FROM `").append(repoName).append("` ");
             sql.append("ON (").append(tableName);
             
-            // 如果指定了新表名（恢复到不同集群或重命名）
             if (newTableName != null && !newTableName.isEmpty()) {
                 sql.append(" AS ").append(newTableName);
             }
@@ -303,26 +298,26 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
                 sql.append("\"backup_timestamp\"=\"").append(backupTimestamp).append("\"");
             }
             
-            if (targetCluster != null && !targetCluster.isEmpty()) {
+            if (restoreClusterId != null && !restoreClusterId.isEmpty()) {
                 if (backupTimestamp != null) sql.append(", ");
-                sql.append("\"cluster\"=\"").append(targetCluster).append("\"");
+                sql.append("\"cluster\"=\"").append(restoreClusterId).append("\"");
             }
             
             sql.append(")");
 
-            log.info("执行恢复SQL: {}", sql);
+            log.info("Execute restore SQL: {}", sql);
             jdbcTemplate.execute(sql.toString());
 
             result.put("code", 200);
-            result.put("message", "恢复任务已提交");
-            result.put("快照名", snapshotName);
-            result.put("数据库名", database);
-            result.put("表名", tableName);
-            result.put("新表名", newTableName);
-            result.put("恢复机房id", targetCluster);
+            result.put("message", "Restore task submitted");
+            result.put("snapshotName", snapshotName);
+            result.put("databaseName", databaseName);
+            result.put("tableName", tableName);
+            result.put("newTableName", newTableName);
+            result.put("restoreClusterId", restoreClusterId);
         } catch (Exception e) {
-            log.error("恢复失败: {}", e.getMessage(), e);
-            return errorResponse("恢复失败: " + e.getMessage());
+            log.error("Restore failed: {}", e.getMessage(), e);
+            return errorResponse("Restore failed: " + e.getMessage());
         }
 
         return result;
@@ -332,20 +327,20 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
     public JSONObject showRestore(Map<String, Object> params) {
         JSONObject result = new JSONObject();
         
-        String database = getParam(params, "数据库名");
-        String sql = (database != null && !database.isEmpty()) 
-            ? "SHOW RESTORE FROM " + database 
+        String databaseName = getStringParam(params, "databaseName");
+        String sql = (databaseName != null && !databaseName.isEmpty()) 
+            ? "SHOW RESTORE FROM " + databaseName 
             : "SHOW RESTORE";
 
         try {
             List<Map<String, Object>> list = jdbcTemplate.queryForList(sql);
             
             result.put("code", 200);
-            result.put("message", "查询成功");
+            result.put("message", "Query successful");
             result.put("data", list);
         } catch (Exception e) {
-            log.error("查询恢复进度失败: {}", e.getMessage(), e);
-            return errorResponse("查询失败: " + e.getMessage());
+            log.error("Query restore progress failed: {}", e.getMessage(), e);
+            return errorResponse("Query failed: " + e.getMessage());
         }
 
         return result;
@@ -357,60 +352,60 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
     public JSONObject backupAndRestore(Map<String, Object> params) {
         JSONObject result = new JSONObject();
         result.put("code", 200);
-        result.put("message", "开始执行备份与恢复流程");
+        result.put("message", "Starting backup and restore process");
         
         JSONArray steps = new JSONArray();
 
         try {
-            // 步骤1: 备份表
-            log.info("步骤1: 备份表");
+            // Step 1: Backup table
+            log.info("Step 1: Backup table");
             JSONObject backupResult = backupTable(params);
-            steps.add(createStepResult("备份表", backupResult));
+            steps.add(createStepResult("backupTable", backupResult));
             
             if (backupResult.getIntValue("code") != 200) {
                 result.put("code", 500);
-                result.put("message", "备份失败，流程终止");
+                result.put("message", "Backup failed, process terminated");
                 result.put("steps", steps);
                 return result;
             }
 
-            String snapshotName = backupResult.getString("快照名");
+            String snapshotName = backupResult.getString("snapshotName");
 
-            // 步骤2: 查看备份进度
-            log.info("步骤2: 查看备份进度");
+            // Step 2: Show backup progress
+            log.info("Step 2: Show backup progress");
             Thread.sleep(2000);
             JSONObject showBackupResult = showBackup(params);
-            steps.add(createStepResult("查看备份进度", showBackupResult));
+            steps.add(createStepResult("showBackup", showBackupResult));
 
-            // 步骤3: 查看备份快照
-            log.info("步骤3: 查看备份快照");
-            params.put("快照名", snapshotName);
+            // Step 3: Show snapshot
+            log.info("Step 3: Show snapshot");
+            params.put("snapshotName", snapshotName);
             JSONObject showSnapshotResult = showSnapshot(params);
-            steps.add(createStepResult("查看备份快照", showSnapshotResult));
+            steps.add(createStepResult("showSnapshot", showSnapshotResult));
 
-            // 步骤4: 恢复快照（如果指定了恢复机房）
-            String targetCluster = getParam(params, "恢复机房id");
-            if (targetCluster != null && !targetCluster.isEmpty()) {
-                log.info("步骤4: 恢复快照到机房: {}", targetCluster);
+            // Step 4: Restore snapshot (if target cluster specified)
+            String restoreClusterId = getStringParam(params, "restoreClusterId");
+            if (restoreClusterId != null && !restoreClusterId.isEmpty()) {
+                log.info("Step 4: Restore snapshot to cluster: {}", restoreClusterId);
                 JSONObject restoreResult = restoreSnapshot(params);
-                steps.add(createStepResult("恢复快照", restoreResult));
+                steps.add(createStepResult("restoreSnapshot", restoreResult));
 
                 if (restoreResult.getIntValue("code") == 200) {
-                    // 步骤5: 查看恢复进度
-                    log.info("步骤5: 查看恢复进度");
+                    // Step 5: Show restore progress
+                    log.info("Step 5: Show restore progress");
                     Thread.sleep(2000);
                     JSONObject showRestoreResult = showRestore(params);
-                    steps.add(createStepResult("查看恢复进度", showRestoreResult));
+                    steps.add(createStepResult("showRestore", showRestoreResult));
                 }
             }
 
             result.put("steps", steps);
-            result.put("快照名", snapshotName);
+            result.put("snapshotName", snapshotName);
             
         } catch (Exception e) {
-            log.error("备份与恢复流程失败: {}", e.getMessage(), e);
+            log.error("Backup and restore process failed: {}", e.getMessage(), e);
             result.put("code", 500);
-            result.put("message", "流程执行失败: " + e.getMessage());
+            result.put("message", "Process execution failed: " + e.getMessage());
             result.put("steps", steps);
         }
 

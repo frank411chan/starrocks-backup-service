@@ -18,6 +18,7 @@
 - Druid 连接池
 - FastJSON2
 - Hutool 工具包
+- JUnit 5 + Mockito（单元测试）
 
 ## 快速开始
 
@@ -48,17 +49,10 @@ mvn clean package
 java -jar target/starrocks-backup-service-1.0.0.jar
 ```
 
-### 3. 测试接口
+### 3. 运行单元测试
 
 ```bash
-curl -X POST http://localhost:8080/api/starrocks/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "方法名": "显示表",
-    "参数": {
-      "数据库名": "lmp_label"
-    }
-  }'
+mvn test
 ```
 
 ## API 接口
@@ -70,42 +64,59 @@ POST /api/starrocks/execute
 Content-Type: application/json
 ```
 
-### 请求参数结构
+### 请求参数结构（Java 8 命名规范）
 
 ```json
 {
-  "方法名": "方法名称",
-  "参数": {
-    "备份机房id": "ht",
-    "恢复机房id": "db",
-    "数据库名": "lmp_label",
-    "表名": "table1",
+  "methodName": "backupAndRestore",
+  "params": {
+    "backupClusterId": "ht",
+    "restoreClusterId": "db",
+    "databaseName": "lmp_label",
+    "tableName": "table1",
     "byPartition": true,
-    "分区名": "p20260315"
+    "partitionName": "p20260315"
   }
 }
 ```
 
+### 参数说明
+
+| 参数名 | 类型 | 必填 | 说明 |
+|-------|------|:---:|------|
+| methodName | String | ✅ | 方法名（驼峰命名） |
+| params | Object | ✅ | 方法参数 |
+| backupClusterId | String | 条件 | 源集群标识，如 "ht" |
+| restoreClusterId | String | 条件 | 目标集群标识，如 "db" |
+| databaseName | String | ✅ | 数据库名称 |
+| tableName | String | ✅ | 表名称 |
+| byPartition | Boolean | 可选 | 是否按分区备份，默认 false |
+| partitionName | String/List | 条件 | 分区名称，支持单分区或多分区 |
+| repoName | String | ✅ | 备份仓库名称 |
+| snapshotName | String | 可选 | 快照名称，默认自动生成 |
+| newTableName | String | 可选 | 恢复后的新表名 |
+| backupTimestamp | String | 可选 | 备份时间戳 |
+
 ### 支持的方法
 
 #### 仓库管理
-- `创建HDFS仓库` - 创建 HDFS 备份仓库
-- `显示仓库列表` - 查看所有仓库
+- `createRepository` - 创建 HDFS 备份仓库
+- `showRepositories` - 查看所有仓库
 
 #### 表管理
-- `显示表` - 查看数据库中的表
+- `showTables` - 查看数据库中的表
 
 #### 备份管理
-- `备份表` - 备份表（支持分区）
-- `查看备份进度` - 查看备份进度
-- `查看备份快照` - 查看备份快照
+- `backupTable` - 备份表（支持分区）
+- `showBackup` - 查看备份进度
+- `showSnapshot` - 查看备份快照
 
 #### 恢复管理
-- `恢复快照` - 恢复快照
-- `查看恢复进度` - 查看恢复进度
+- `restoreSnapshot` - 恢复快照
+- `showRestore` - 查看恢复进度
 
 #### 整合方法
-- `备份与恢复表` - 备份+恢复全流程
+- `backupAndRestore` - 备份+恢复全流程
 
 ## 使用示例
 
@@ -113,13 +124,13 @@ Content-Type: application/json
 
 ```json
 {
-  "方法名": "创建HDFS仓库",
-  "参数": {
-    "仓库名": "hdfs_repo",
-    "HDFS路径": "hdfs://namenode:9000/starrocks/backup",
-    "broker名": "hdfs_broker",
-    "用户名": "hdfs_user",
-    "密码": "hdfs_pass"
+  "methodName": "createRepository",
+  "params": {
+    "repoName": "hdfs_repo",
+    "hdfsPath": "hdfs://namenode:9000/starrocks/backup",
+    "brokerName": "hdfs_broker",
+    "username": "hdfs_user",
+    "password": "hdfs_pass"
   }
 }
 ```
@@ -128,12 +139,12 @@ Content-Type: application/json
 
 ```json
 {
-  "方法名": "备份表",
-  "参数": {
-    "数据库名": "lmp_label",
-    "表名": "table1",
-    "仓库名": "hdfs_repo",
-    "快照名": "snapshot_table1_20240315",
+  "methodName": "backupTable",
+  "params": {
+    "databaseName": "lmp_label",
+    "tableName": "table1",
+    "repoName": "hdfs_repo",
+    "snapshotName": "snapshot_table1_20240315",
     "byPartition": false
   }
 }
@@ -143,14 +154,14 @@ Content-Type: application/json
 
 ```json
 {
-  "方法名": "备份表",
-  "参数": {
-    "数据库名": "lmp_label",
-    "表名": "table1",
-    "仓库名": "hdfs_repo",
-    "快照名": "snapshot_table1_p20260315",
+  "methodName": "backupTable",
+  "params": {
+    "databaseName": "lmp_label",
+    "tableName": "table1",
+    "repoName": "hdfs_repo",
+    "snapshotName": "snapshot_table1_p20260315",
     "byPartition": true,
-    "分区名": "p20260315"
+    "partitionName": "p20260315"
   }
 }
 ```
@@ -159,13 +170,13 @@ Content-Type: application/json
 
 ```json
 {
-  "方法名": "备份表",
-  "参数": {
-    "数据库名": "lmp_label",
-    "表名": "table1",
-    "仓库名": "hdfs_repo",
+  "methodName": "backupTable",
+  "params": {
+    "databaseName": "lmp_label",
+    "tableName": "table1",
+    "repoName": "hdfs_repo",
     "byPartition": true,
-    "分区名": ["p20260315", "p20260316", "p20260317"]
+    "partitionName": ["p20260315", "p20260316", "p20260317"]
   }
 }
 ```
@@ -174,15 +185,15 @@ Content-Type: application/json
 
 ```json
 {
-  "方法名": "恢复快照",
-  "参数": {
-    "数据库名": "lmp_label",
-    "快照名": "snapshot_table1_20240315",
-    "仓库名": "hdfs_repo",
-    "表名": "table1",
-    "新表名": "table1_backup",
-    "备份时间戳": "2024-03-15-10-30-00",
-    "恢复机房id": "db"
+  "methodName": "restoreSnapshot",
+  "params": {
+    "databaseName": "lmp_label",
+    "snapshotName": "snapshot_table1_20240315",
+    "repoName": "hdfs_repo",
+    "tableName": "table1",
+    "newTableName": "table1_backup",
+    "backupTimestamp": "2024-03-15-10-30-00",
+    "restoreClusterId": "db"
   }
 }
 ```
@@ -191,35 +202,46 @@ Content-Type: application/json
 
 ```json
 {
-  "方法名": "备份与恢复表",
-  "参数": {
-    "备份机房id": "ht",
-    "恢复机房id": "db",
-    "数据库名": "lmp_label",
-    "表名": "table1",
-    "仓库名": "hdfs_repo",
+  "methodName": "backupAndRestore",
+  "params": {
+    "backupClusterId": "ht",
+    "restoreClusterId": "db",
+    "databaseName": "lmp_label",
+    "tableName": "table1",
+    "repoName": "hdfs_repo",
     "byPartition": true,
-    "分区名": "p20260315"
+    "partitionName": "p20260315"
   }
 }
 ```
 
-## 参数说明
+## 单元测试
 
-| 参数名 | 类型 | 必填 | 说明 |
-|-------|------|:---:|------|
-| 方法名 | String | ✅ | 要执行的方法 |
-| 参数 | Object | ✅ | 方法参数 |
-| 备份机房id | String | 条件 | 源集群标识，如 "ht" |
-| 恢复机房id | String | 条件 | 目标集群标识，如 "db" |
-| 数据库名 | String | ✅ | 数据库名称 |
-| 表名 | String | ✅ | 表名称 |
-| byPartition | Boolean | 可选 | 是否按分区备份，默认 false |
-| 分区名 | String/List | 条件 | 分区名称，支持单分区或多分区 |
-| 仓库名 | String | ✅ | 备份仓库名称 |
-| 快照名 | String | 可选 | 快照名称，默认自动生成 |
-| 新表名 | String | 可选 | 恢复后的新表名 |
-| 备份时间戳 | String | 可选 | 备份时间戳 |
+### 测试覆盖
+
+- ✅ Controller 层测试
+- ✅ Service 层测试
+- ✅ 参数解析测试
+- ✅ 异常处理测试
+
+### 运行测试
+
+```bash
+# 运行所有测试
+mvn test
+
+# 运行指定测试类
+mvn test -Dtest=StarRocksBackupServiceImplTest
+
+# 生成测试报告
+mvn surefire-report:report
+```
+
+### 测试报告位置
+
+```
+target/surefire-reports/
+```
 
 ## StarRocks 版本要求
 
