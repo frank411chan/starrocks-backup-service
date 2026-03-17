@@ -1,11 +1,13 @@
 package com.starrocks.backup.service.impl;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -24,6 +26,9 @@ class StarRocksBackupServiceImplTest {
     @Mock
     private JdbcTemplate jdbcTemplate;
 
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
+
     @InjectMocks
     private StarRocksBackupServiceImpl backupService;
 
@@ -40,16 +45,14 @@ class StarRocksBackupServiceImplTest {
     void testGetStringParam_WithValue() {
         params.put("databaseName", "test_db");
         
-        // 通过反射测试私有方法或使用公共方法间接测试
-        JSONObject result = backupService.showTables(params);
+        ObjectNode result = backupService.showTables(params);
         
         verify(jdbcTemplate).queryForList(eq("SHOW TABLES FROM test_db"));
     }
 
     @Test
     void testGetStringParam_WithDefault() {
-        // 不设置 databaseName，使用默认值
-        JSONObject result = backupService.showTables(params);
+        ObjectNode result = backupService.showTables(params);
         
         verify(jdbcTemplate).queryForList(eq("SHOW TABLES FROM default_cluster"));
     }
@@ -118,10 +121,10 @@ class StarRocksBackupServiceImplTest {
         
         doNothing().when(jdbcTemplate).execute(anyString());
         
-        JSONObject result = backupService.createRepository(params);
+        ObjectNode result = backupService.createRepository(params);
         
-        assertEquals(200, result.getIntValue("code"));
-        assertEquals("hdfs_repo", result.getString("repoName"));
+        assertEquals(200, result.get("code").asInt());
+        assertEquals("hdfs_repo", result.get("repoName").asText());
         verify(jdbcTemplate).execute(contains("CREATE REPOSITORY"));
     }
 
@@ -130,10 +133,10 @@ class StarRocksBackupServiceImplTest {
         params.put("repoName", "hdfs_repo");
         // missing hdfsPath
         
-        JSONObject result = backupService.createRepository(params);
+        ObjectNode result = backupService.createRepository(params);
         
-        assertEquals(500, result.getIntValue("code"));
-        assertTrue(result.getString("message").contains("cannot be empty"));
+        assertEquals(500, result.get("code").asInt());
+        assertTrue(result.get("message").asText().contains("cannot be empty"));
     }
 
     @Test
@@ -146,10 +149,10 @@ class StarRocksBackupServiceImplTest {
         doThrow(new RuntimeException("Connection refused"))
             .when(jdbcTemplate).execute(anyString());
         
-        JSONObject result = backupService.createRepository(params);
+        ObjectNode result = backupService.createRepository(params);
         
-        assertEquals(500, result.getIntValue("code"));
-        assertTrue(result.getString("message").contains("Connection refused"));
+        assertEquals(500, result.get("code").asInt());
+        assertTrue(result.get("message").asText().contains("Connection refused"));
     }
 
     @Test
@@ -162,11 +165,11 @@ class StarRocksBackupServiceImplTest {
         
         when(jdbcTemplate.queryForList("SHOW REPOSITORIES")).thenReturn(mockList);
         
-        JSONObject result = backupService.showRepositories(params);
+        ObjectNode result = backupService.showRepositories(params);
         
-        assertEquals(200, result.getIntValue("code"));
-        assertEquals(1, result.getIntValue("total"));
-        assertNotNull(result.getJSONArray("data"));
+        assertEquals(200, result.get("code").asInt());
+        assertEquals(1, result.get("total").asInt());
+        assertNotNull(result.get("data"));
     }
 
     // ==================== 表管理测试 ====================
@@ -182,11 +185,11 @@ class StarRocksBackupServiceImplTest {
         
         when(jdbcTemplate.queryForList("SHOW TABLES FROM test_db")).thenReturn(mockList);
         
-        JSONObject result = backupService.showTables(params);
+        ObjectNode result = backupService.showTables(params);
         
-        assertEquals(200, result.getIntValue("code"));
-        assertEquals("test_db", result.getString("databaseName"));
-        assertEquals(1, result.getIntValue("total"));
+        assertEquals(200, result.get("code").asInt());
+        assertEquals("test_db", result.get("databaseName").asText());
+        assertEquals(1, result.get("total").asInt());
     }
 
     // ==================== 备份管理测试 ====================
@@ -201,10 +204,10 @@ class StarRocksBackupServiceImplTest {
         
         doNothing().when(jdbcTemplate).execute(anyString());
         
-        JSONObject result = backupService.backupTable(params);
+        ObjectNode result = backupService.backupTable(params);
         
-        assertEquals(200, result.getIntValue("code"));
-        assertEquals("snapshot_001", result.getString("snapshotName"));
+        assertEquals(200, result.get("code").asInt());
+        assertEquals("snapshot_001", result.get("snapshotName").asText());
         verify(jdbcTemplate).execute(contains("BACKUP SNAPSHOT"));
     }
 
@@ -217,11 +220,11 @@ class StarRocksBackupServiceImplTest {
         
         doNothing().when(jdbcTemplate).execute(anyString());
         
-        JSONObject result = backupService.backupTable(params);
+        ObjectNode result = backupService.backupTable(params);
         
-        assertEquals(200, result.getIntValue("code"));
-        assertNotNull(result.getString("snapshotName"));
-        assertTrue(result.getString("snapshotName").startsWith("db1_table1_"));
+        assertEquals(200, result.get("code").asInt());
+        assertNotNull(result.get("snapshotName"));
+        assertTrue(result.get("snapshotName").asText().startsWith("db1_table1_"));
     }
 
     @Test
@@ -229,9 +232,9 @@ class StarRocksBackupServiceImplTest {
         params.put("databaseName", "db1");
         // missing tableName and repoName
         
-        JSONObject result = backupService.backupTable(params);
+        ObjectNode result = backupService.backupTable(params);
         
-        assertEquals(500, result.getIntValue("code"));
+        assertEquals(500, result.get("code").asInt());
     }
 
     @Test
@@ -241,9 +244,9 @@ class StarRocksBackupServiceImplTest {
         List<Map<String, Object>> mockList = new ArrayList<>();
         when(jdbcTemplate.queryForList("SHOW BACKUP FROM db1")).thenReturn(mockList);
         
-        JSONObject result = backupService.showBackup(params);
+        ObjectNode result = backupService.showBackup(params);
         
-        assertEquals(200, result.getIntValue("code"));
+        assertEquals(200, result.get("code").asInt());
         verify(jdbcTemplate).queryForList("SHOW BACKUP FROM db1");
     }
 
@@ -255,9 +258,9 @@ class StarRocksBackupServiceImplTest {
         List<Map<String, Object>> mockList = new ArrayList<>();
         when(jdbcTemplate.queryForList(contains("WHERE SNAPSHOT"))).thenReturn(mockList);
         
-        JSONObject result = backupService.showSnapshot(params);
+        ObjectNode result = backupService.showSnapshot(params);
         
-        assertEquals(200, result.getIntValue("code"));
+        assertEquals(200, result.get("code").asInt());
     }
 
     // ==================== 恢复管理测试 ====================
@@ -274,10 +277,10 @@ class StarRocksBackupServiceImplTest {
         
         doNothing().when(jdbcTemplate).execute(anyString());
         
-        JSONObject result = backupService.restoreSnapshot(params);
+        ObjectNode result = backupService.restoreSnapshot(params);
         
-        assertEquals(200, result.getIntValue("code"));
-        assertEquals("table1_backup", result.getString("newTableName"));
+        assertEquals(200, result.get("code").asInt());
+        assertEquals("table1_backup", result.get("newTableName").asText());
         verify(jdbcTemplate).execute(contains("RESTORE SNAPSHOT"));
         verify(jdbcTemplate).execute(contains("cluster2"));
     }
@@ -291,9 +294,9 @@ class StarRocksBackupServiceImplTest {
         
         doNothing().when(jdbcTemplate).execute(anyString());
         
-        JSONObject result = backupService.restoreSnapshot(params);
+        ObjectNode result = backupService.restoreSnapshot(params);
         
-        assertEquals(200, result.getIntValue("code"));
+        assertEquals(200, result.get("code").asInt());
         verify(jdbcTemplate).execute(not(contains("AS")));
     }
 
@@ -310,11 +313,11 @@ class StarRocksBackupServiceImplTest {
         doNothing().when(jdbcTemplate).execute(anyString());
         when(jdbcTemplate.queryForList(anyString())).thenReturn(new ArrayList<>());
         
-        JSONObject result = backupService.backupAndRestore(params);
+        ObjectNode result = backupService.backupAndRestore(params);
         
-        assertEquals(200, result.getIntValue("code"));
-        assertNotNull(result.getJSONArray("steps"));
-        assertNotNull(result.getString("snapshotName"));
+        assertEquals(200, result.get("code").asInt());
+        assertNotNull(result.get("steps"));
+        assertNotNull(result.get("snapshotName"));
     }
 
     @Test
@@ -326,10 +329,10 @@ class StarRocksBackupServiceImplTest {
         doThrow(new RuntimeException("Backup failed"))
             .when(jdbcTemplate).execute(contains("BACKUP SNAPSHOT"));
         
-        JSONObject result = backupService.backupAndRestore(params);
+        ObjectNode result = backupService.backupAndRestore(params);
         
-        assertEquals(500, result.getIntValue("code"));
-        assertTrue(result.getString("message").contains("Backup failed"));
+        assertEquals(500, result.get("code").asInt());
+        assertTrue(result.get("message").asText().contains("Backup failed"));
     }
 
     @Test
@@ -342,10 +345,10 @@ class StarRocksBackupServiceImplTest {
         doNothing().when(jdbcTemplate).execute(anyString());
         when(jdbcTemplate.queryForList(anyString())).thenReturn(new ArrayList<>());
         
-        JSONObject result = backupService.backupAndRestore(params);
+        ObjectNode result = backupService.backupAndRestore(params);
         
-        assertEquals(200, result.getIntValue("code"));
+        assertEquals(200, result.get("code").asInt());
         // Should only have 3 steps (backup, showBackup, showSnapshot)
-        assertEquals(3, result.getJSONArray("steps").size());
+        assertEquals(3, result.get("steps").size());
     }
 }

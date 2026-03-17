@@ -1,11 +1,14 @@
 package com.starrocks.backup.controller;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.starrocks.backup.service.StarRocksBackupService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import javax.validation.Valid;
+import javax.validation.constraints.NotBlank;
 import java.util.Map;
 
 /**
@@ -31,6 +34,7 @@ import java.util.Map;
 public class StarRocksBackupController {
 
     private final StarRocksBackupService backupService;
+    private final ObjectMapper objectMapper;
 
     /**
      * 统一入口方法
@@ -39,9 +43,9 @@ public class StarRocksBackupController {
      * @return 执行结果
      */
     @PostMapping("/execute")
-    public JSONObject execute(@RequestBody Map<String, Object> request) {
-        String methodName = (String) request.get("methodName");
-        Map<String, Object> params = (Map<String, Object>) request.get("params");
+    public ObjectNode execute(@RequestBody @Valid ExecuteRequest request) {
+        String methodName = request.getMethodName();
+        Map<String, Object> params = request.getParams();
         
         if (methodName == null || methodName.isEmpty()) {
             return errorResponse("methodName cannot be empty");
@@ -95,18 +99,44 @@ public class StarRocksBackupController {
      * 健康检查
      */
     @GetMapping("/health")
-    public JSONObject health() {
-        JSONObject result = new JSONObject();
+    public ObjectNode health() {
+        ObjectNode result = objectMapper.createObjectNode();
         result.put("code", 200);
         result.put("message", "Service is running");
         result.put("timestamp", System.currentTimeMillis());
         return result;
     }
 
-    private JSONObject errorResponse(String message) {
-        JSONObject error = new JSONObject();
+    private ObjectNode errorResponse(String message) {
+        ObjectNode error = objectMapper.createObjectNode();
         error.put("code", 400);
         error.put("message", message);
         return error;
+    }
+
+    /**
+     * 请求参数对象（用于 Hibernate Validator 验证）
+     */
+    public static class ExecuteRequest {
+        @NotBlank(message = "methodName cannot be empty")
+        private String methodName;
+        
+        private Map<String, Object> params;
+
+        public String getMethodName() {
+            return methodName;
+        }
+
+        public void setMethodName(String methodName) {
+            this.methodName = methodName;
+        }
+
+        public Map<String, Object> getParams() {
+            return params;
+        }
+
+        public void setParams(Map<String, Object> params) {
+            this.params = params;
+        }
     }
 }

@@ -1,12 +1,14 @@
 package com.starrocks.backup.controller;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.starrocks.backup.service.StarRocksBackupService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.HashMap;
@@ -25,218 +27,219 @@ class StarRocksBackupControllerTest {
     @Mock
     private StarRocksBackupService backupService;
 
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
+
     @InjectMocks
     private StarRocksBackupController controller;
 
-    private Map<String, Object> request;
-    private Map<String, Object> params;
+    private StarRocksBackupController.ExecuteRequest request;
 
     @BeforeEach
     void setUp() {
-        request = new HashMap<>();
-        params = new HashMap<>();
+        request = new StarRocksBackupController.ExecuteRequest();
     }
 
     @Test
     void testExecute_MissingMethodName() {
-        request.put("params", params);
+        request.setParams(new HashMap<>());
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(400, result.getIntValue("code"));
-        assertTrue(result.getString("message").contains("methodName"));
+        assertEquals(400, result.get("code").asInt());
+        assertTrue(result.get("message").asText().contains("methodName"));
     }
 
     @Test
     void testExecute_MissingParams() {
-        request.put("methodName", "showTables");
+        request.setMethodName("showTables");
+        // params is null
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(400, result.getIntValue("code"));
-        assertTrue(result.getString("message").contains("params"));
+        assertEquals(400, result.get("code").asInt());
+        assertTrue(result.get("message").asText().contains("params"));
     }
 
     @Test
     void testExecute_CreateRepository() {
-        request.put("methodName", "createRepository");
-        request.put("params", params);
+        request.setMethodName("createRepository");
+        request.setParams(new HashMap<>());
         
-        JSONObject mockResult = new JSONObject();
+        ObjectNode mockResult = objectMapper.createObjectNode();
         mockResult.put("code", 200);
         mockResult.put("message", "Success");
         
         when(backupService.createRepository(anyMap())).thenReturn(mockResult);
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(200, result.getIntValue("code"));
-        verify(backupService).createRepository(params);
+        assertEquals(200, result.get("code").asInt());
+        verify(backupService).createRepository(anyMap());
     }
 
     @Test
     void testExecute_ShowRepositories() {
-        request.put("methodName", "showRepositories");
-        request.put("params", params);
+        request.setMethodName("showRepositories");
+        request.setParams(new HashMap<>());
         
-        JSONObject mockResult = new JSONObject();
+        ObjectNode mockResult = objectMapper.createObjectNode();
         mockResult.put("code", 200);
-        mockResult.put("data", new java.util.ArrayList<>());
         
         when(backupService.showRepositories(anyMap())).thenReturn(mockResult);
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(200, result.getIntValue("code"));
-        verify(backupService).showRepositories(params);
+        assertEquals(200, result.get("code").asInt());
+        verify(backupService).showRepositories(anyMap());
     }
 
     @Test
     void testExecute_ShowTables() {
-        request.put("methodName", "showTables");
-        request.put("params", params);
+        request.setMethodName("showTables");
+        request.setParams(new HashMap<>());
         
-        JSONObject mockResult = new JSONObject();
+        ObjectNode mockResult = objectMapper.createObjectNode();
         mockResult.put("code", 200);
         mockResult.put("databaseName", "test_db");
         
         when(backupService.showTables(anyMap())).thenReturn(mockResult);
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(200, result.getIntValue("code"));
-        verify(backupService).showTables(params);
+        assertEquals(200, result.get("code").asInt());
+        verify(backupService).showTables(anyMap());
     }
 
     @Test
     void testExecute_BackupTable() {
-        request.put("methodName", "backupTable");
-        request.put("params", params);
+        request.setMethodName("backupTable");
+        request.setParams(new HashMap<>());
         
-        JSONObject mockResult = new JSONObject();
+        ObjectNode mockResult = objectMapper.createObjectNode();
         mockResult.put("code", 200);
         mockResult.put("snapshotName", "snapshot_001");
         
         when(backupService.backupTable(anyMap())).thenReturn(mockResult);
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(200, result.getIntValue("code"));
-        verify(backupService).backupTable(params);
+        assertEquals(200, result.get("code").asInt());
+        verify(backupService).backupTable(anyMap());
     }
 
     @Test
     void testExecute_ShowBackup() {
-        request.put("methodName", "showBackup");
-        request.put("params", params);
+        request.setMethodName("showBackup");
+        request.setParams(new HashMap<>());
         
-        JSONObject mockResult = new JSONObject();
+        ObjectNode mockResult = objectMapper.createObjectNode();
         mockResult.put("code", 200);
         
         when(backupService.showBackup(anyMap())).thenReturn(mockResult);
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(200, result.getIntValue("code"));
-        verify(backupService).showBackup(params);
+        assertEquals(200, result.get("code").asInt());
+        verify(backupService).showBackup(anyMap());
     }
 
     @Test
     void testExecute_ShowSnapshot() {
-        request.put("methodName", "showSnapshot");
-        request.put("params", params);
+        request.setMethodName("showSnapshot");
+        request.setParams(new HashMap<>());
         
-        JSONObject mockResult = new JSONObject();
+        ObjectNode mockResult = objectMapper.createObjectNode();
         mockResult.put("code", 200);
         
         when(backupService.showSnapshot(anyMap())).thenReturn(mockResult);
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(200, result.getIntValue("code"));
-        verify(backupService).showSnapshot(params);
+        assertEquals(200, result.get("code").asInt());
+        verify(backupService).showSnapshot(anyMap());
     }
 
     @Test
     void testExecute_RestoreSnapshot() {
-        request.put("methodName", "restoreSnapshot");
-        request.put("params", params);
+        request.setMethodName("restoreSnapshot");
+        request.setParams(new HashMap<>());
         
-        JSONObject mockResult = new JSONObject();
+        ObjectNode mockResult = objectMapper.createObjectNode();
         mockResult.put("code", 200);
         
         when(backupService.restoreSnapshot(anyMap())).thenReturn(mockResult);
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(200, result.getIntValue("code"));
-        verify(backupService).restoreSnapshot(params);
+        assertEquals(200, result.get("code").asInt());
+        verify(backupService).restoreSnapshot(anyMap());
     }
 
     @Test
     void testExecute_ShowRestore() {
-        request.put("methodName", "showRestore");
-        request.put("params", params);
+        request.setMethodName("showRestore");
+        request.setParams(new HashMap<>());
         
-        JSONObject mockResult = new JSONObject();
+        ObjectNode mockResult = objectMapper.createObjectNode();
         mockResult.put("code", 200);
         
         when(backupService.showRestore(anyMap())).thenReturn(mockResult);
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(200, result.getIntValue("code"));
-        verify(backupService).showRestore(params);
+        assertEquals(200, result.get("code").asInt());
+        verify(backupService).showRestore(anyMap());
     }
 
     @Test
     void testExecute_BackupAndRestore() {
-        request.put("methodName", "backupAndRestore");
-        request.put("params", params);
+        request.setMethodName("backupAndRestore");
+        request.setParams(new HashMap<>());
         
-        JSONObject mockResult = new JSONObject();
+        ObjectNode mockResult = objectMapper.createObjectNode();
         mockResult.put("code", 200);
-        mockResult.put("steps", new java.util.ArrayList<>());
+        mockResult.set("steps", objectMapper.createArrayNode());
         
         when(backupService.backupAndRestore(anyMap())).thenReturn(mockResult);
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(200, result.getIntValue("code"));
-        verify(backupService).backupAndRestore(params);
+        assertEquals(200, result.get("code").asInt());
+        verify(backupService).backupAndRestore(anyMap());
     }
 
     @Test
     void testExecute_UnknownMethod() {
-        request.put("methodName", "unknownMethod");
-        request.put("params", params);
+        request.setMethodName("unknownMethod");
+        request.setParams(new HashMap<>());
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(400, result.getIntValue("code"));
-        assertTrue(result.getString("message").contains("Unknown method"));
+        assertEquals(400, result.get("code").asInt());
+        assertTrue(result.get("message").asText().contains("Unknown method"));
     }
 
     @Test
     void testExecute_Exception() {
-        request.put("methodName", "backupTable");
-        request.put("params", params);
+        request.setMethodName("backupTable");
+        request.setParams(new HashMap<>());
         
         when(backupService.backupTable(anyMap()))
             .thenThrow(new RuntimeException("Database connection failed"));
         
-        JSONObject result = controller.execute(request);
+        ObjectNode result = controller.execute(request);
         
-        assertEquals(500, result.getIntValue("code"));
-        assertTrue(result.getString("message").contains("Execution failed"));
+        assertEquals(500, result.get("code").asInt());
+        assertTrue(result.get("message").asText().contains("Execution failed"));
     }
 
     @Test
     void testHealth() {
-        JSONObject result = controller.health();
+        ObjectNode result = controller.health();
         
-        assertEquals(200, result.getIntValue("code"));
-        assertEquals("Service is running", result.getString("message"));
-        assertNotNull(result.getLong("timestamp"));
+        assertEquals(200, result.get("code").asInt());
+        assertEquals("Service is running", result.get("message").asText());
+        assertNotNull(result.get("timestamp"));
     }
 }

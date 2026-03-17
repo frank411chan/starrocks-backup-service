@@ -1,7 +1,8 @@
 package com.starrocks.backup.service.impl;
 
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.starrocks.backup.service.StarRocksBackupService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,7 @@ import java.util.Map;
 public class StarRocksBackupServiceImpl implements StarRocksBackupService {
 
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
     // ==================== 参数解析工具方法 ====================
 
@@ -69,12 +71,24 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
         return Boolean.parseBoolean(String.valueOf(byPartition));
     }
 
+    private ObjectNode successResponse(String message) {
+        ObjectNode result = objectMapper.createObjectNode();
+        result.put("code", 200);
+        result.put("message", message);
+        return result;
+    }
+
+    private ObjectNode errorResponse(String message) {
+        ObjectNode error = objectMapper.createObjectNode();
+        error.put("code", 500);
+        error.put("message", message);
+        return error;
+    }
+
     // ==================== 仓库管理 ====================
 
     @Override
-    public JSONObject createRepository(Map<String, Object> params) {
-        JSONObject result = new JSONObject();
-        
+    public ObjectNode createRepository(Map<String, Object> params) {
         String repoName = getStringParam(params, "repoName");
         String hdfsPath = getStringParam(params, "hdfsPath");
         String brokerName = getStringParam(params, "brokerName", "hdfs_broker");
@@ -94,69 +108,56 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
             log.info("Execute SQL: {}", sql);
             jdbcTemplate.execute(sql);
 
-            result.put("code", 200);
-            result.put("message", "Repository created successfully");
+            ObjectNode result = successResponse("Repository created successfully");
             result.put("repoName", repoName);
+            return result;
         } catch (Exception e) {
             log.error("Create repository failed: {}", e.getMessage(), e);
-            result.put("code", 500);
-            result.put("message", "Create repository failed: " + e.getMessage());
+            return errorResponse("Create repository failed: " + e.getMessage());
         }
-
-        return result;
     }
 
     @Override
-    public JSONObject showRepositories(Map<String, Object> params) {
-        JSONObject result = new JSONObject();
-        
+    public ObjectNode showRepositories(Map<String, Object> params) {
         try {
             List<Map<String, Object>> list = jdbcTemplate.queryForList("SHOW REPOSITORIES");
             
-            result.put("code", 200);
-            result.put("message", "Query successful");
-            result.put("data", list);
+            ObjectNode result = successResponse("Query successful");
+            result.set("data", objectMapper.valueToTree(list));
             result.put("total", list.size());
+            return result;
         } catch (Exception e) {
             log.error("Query repositories failed: {}", e.getMessage(), e);
             return errorResponse("Query failed: " + e.getMessage());
         }
-
-        return result;
     }
 
     // ==================== 表管理 ====================
 
     @Override
-    public JSONObject showTables(Map<String, Object> params) {
-        JSONObject result = new JSONObject();
-        
+    public ObjectNode showTables(Map<String, Object> params) {
         String databaseName = getStringParam(params, "databaseName", "default_cluster");
 
         try {
             String sql = "SHOW TABLES FROM " + databaseName;
             List<Map<String, Object>> list = jdbcTemplate.queryForList(sql);
             
-            result.put("code", 200);
-            result.put("message", "Query successful");
+            ObjectNode result = successResponse("Query successful");
             result.put("databaseName", databaseName);
-            result.put("data", list);
+            result.set("data", objectMapper.valueToTree(list));
             result.put("total", list.size());
+            return result;
         } catch (Exception e) {
             log.error("Query tables failed: {}", e.getMessage(), e);
             return errorResponse("Query failed: " + e.getMessage());
         }
-
-        return result;
     }
 
     // ==================== 备份管理 ====================
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public JSONObject backupTable(Map<String, Object> params) {
-        JSONObject result = new JSONObject();
-        
+    public ObjectNode backupTable(Map<String, Object> params) {
         String databaseName = getStringParam(params, "databaseName");
         String tableName = getStringParam(params, "tableName");
         String repoName = getStringParam(params, "repoName");
@@ -193,25 +194,21 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
             log.info("Execute backup SQL: {}", sql);
             jdbcTemplate.execute(sql.toString());
 
-            result.put("code", 200);
-            result.put("message", "Backup task submitted");
+            ObjectNode result = successResponse("Backup task submitted");
             result.put("snapshotName", snapshotName);
             result.put("databaseName", databaseName);
             result.put("tableName", tableName);
             result.put("byPartition", byPartition);
-            result.put("partitionName", partitionNames);
+            result.set("partitionName", objectMapper.valueToTree(partitionNames));
+            return result;
         } catch (Exception e) {
             log.error("Backup failed: {}", e.getMessage(), e);
             return errorResponse("Backup failed: " + e.getMessage());
         }
-
-        return result;
     }
 
     @Override
-    public JSONObject showBackup(Map<String, Object> params) {
-        JSONObject result = new JSONObject();
-        
+    public ObjectNode showBackup(Map<String, Object> params) {
         String databaseName = getStringParam(params, "databaseName");
         String sql = (databaseName != null && !databaseName.isEmpty()) 
             ? "SHOW BACKUP FROM " + databaseName 
@@ -220,21 +217,17 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
         try {
             List<Map<String, Object>> list = jdbcTemplate.queryForList(sql);
             
-            result.put("code", 200);
-            result.put("message", "Query successful");
-            result.put("data", list);
+            ObjectNode result = successResponse("Query successful");
+            result.set("data", objectMapper.valueToTree(list));
+            return result;
         } catch (Exception e) {
             log.error("Query backup progress failed: {}", e.getMessage(), e);
             return errorResponse("Query failed: " + e.getMessage());
         }
-
-        return result;
     }
 
     @Override
-    public JSONObject showSnapshot(Map<String, Object> params) {
-        JSONObject result = new JSONObject();
-        
+    public ObjectNode showSnapshot(Map<String, Object> params) {
         String repoName = getStringParam(params, "repoName");
         String snapshotName = getStringParam(params, "snapshotName");
 
@@ -251,24 +244,20 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
 
             List<Map<String, Object>> list = jdbcTemplate.queryForList(sql.toString());
             
-            result.put("code", 200);
-            result.put("message", "Query successful");
-            result.put("data", list);
+            ObjectNode result = successResponse("Query successful");
+            result.set("data", objectMapper.valueToTree(list));
+            return result;
         } catch (Exception e) {
             log.error("Query snapshot failed: {}", e.getMessage(), e);
             return errorResponse("Query failed: " + e.getMessage());
         }
-
-        return result;
     }
 
     // ==================== 恢复管理 ====================
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public JSONObject restoreSnapshot(Map<String, Object> params) {
-        JSONObject result = new JSONObject();
-        
+    public ObjectNode restoreSnapshot(Map<String, Object> params) {
         String databaseName = getStringParam(params, "databaseName");
         String snapshotName = getStringParam(params, "snapshotName");
         String repoName = getStringParam(params, "repoName");
@@ -308,25 +297,21 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
             log.info("Execute restore SQL: {}", sql);
             jdbcTemplate.execute(sql.toString());
 
-            result.put("code", 200);
-            result.put("message", "Restore task submitted");
+            ObjectNode result = successResponse("Restore task submitted");
             result.put("snapshotName", snapshotName);
             result.put("databaseName", databaseName);
             result.put("tableName", tableName);
             result.put("newTableName", newTableName);
             result.put("restoreClusterId", restoreClusterId);
+            return result;
         } catch (Exception e) {
             log.error("Restore failed: {}", e.getMessage(), e);
             return errorResponse("Restore failed: " + e.getMessage());
         }
-
-        return result;
     }
 
     @Override
-    public JSONObject showRestore(Map<String, Object> params) {
-        JSONObject result = new JSONObject();
-        
+    public ObjectNode showRestore(Map<String, Object> params) {
         String databaseName = getStringParam(params, "databaseName");
         String sql = (databaseName != null && !databaseName.isEmpty()) 
             ? "SHOW RESTORE FROM " + databaseName 
@@ -335,96 +320,84 @@ public class StarRocksBackupServiceImpl implements StarRocksBackupService {
         try {
             List<Map<String, Object>> list = jdbcTemplate.queryForList(sql);
             
-            result.put("code", 200);
-            result.put("message", "Query successful");
-            result.put("data", list);
+            ObjectNode result = successResponse("Query successful");
+            result.set("data", objectMapper.valueToTree(list));
+            return result;
         } catch (Exception e) {
             log.error("Query restore progress failed: {}", e.getMessage(), e);
             return errorResponse("Query failed: " + e.getMessage());
         }
-
-        return result;
     }
 
     // ==================== 整合方法 ====================
 
     @Override
-    public JSONObject backupAndRestore(Map<String, Object> params) {
-        JSONObject result = new JSONObject();
-        result.put("code", 200);
-        result.put("message", "Starting backup and restore process");
-        
-        JSONArray steps = new JSONArray();
+    public ObjectNode backupAndRestore(Map<String, Object> params) {
+        ObjectNode result = successResponse("Starting backup and restore process");
+        ArrayNode steps = objectMapper.createArrayNode();
 
         try {
             // Step 1: Backup table
             log.info("Step 1: Backup table");
-            JSONObject backupResult = backupTable(params);
+            ObjectNode backupResult = backupTable(params);
             steps.add(createStepResult("backupTable", backupResult));
             
-            if (backupResult.getIntValue("code") != 200) {
+            if (backupResult.get("code").asInt() != 200) {
                 result.put("code", 500);
                 result.put("message", "Backup failed, process terminated");
-                result.put("steps", steps);
+                result.set("steps", steps);
                 return result;
             }
 
-            String snapshotName = backupResult.getString("snapshotName");
+            String snapshotName = backupResult.get("snapshotName").asText();
 
             // Step 2: Show backup progress
             log.info("Step 2: Show backup progress");
             Thread.sleep(2000);
-            JSONObject showBackupResult = showBackup(params);
+            ObjectNode showBackupResult = showBackup(params);
             steps.add(createStepResult("showBackup", showBackupResult));
 
             // Step 3: Show snapshot
             log.info("Step 3: Show snapshot");
             params.put("snapshotName", snapshotName);
-            JSONObject showSnapshotResult = showSnapshot(params);
+            ObjectNode showSnapshotResult = showSnapshot(params);
             steps.add(createStepResult("showSnapshot", showSnapshotResult));
 
             // Step 4: Restore snapshot (if target cluster specified)
             String restoreClusterId = getStringParam(params, "restoreClusterId");
             if (restoreClusterId != null && !restoreClusterId.isEmpty()) {
                 log.info("Step 4: Restore snapshot to cluster: {}", restoreClusterId);
-                JSONObject restoreResult = restoreSnapshot(params);
+                ObjectNode restoreResult = restoreSnapshot(params);
                 steps.add(createStepResult("restoreSnapshot", restoreResult));
 
-                if (restoreResult.getIntValue("code") == 200) {
+                if (restoreResult.get("code").asInt() == 200) {
                     // Step 5: Show restore progress
                     log.info("Step 5: Show restore progress");
                     Thread.sleep(2000);
-                    JSONObject showRestoreResult = showRestore(params);
+                    ObjectNode showRestoreResult = showRestore(params);
                     steps.add(createStepResult("showRestore", showRestoreResult));
                 }
             }
 
-            result.put("steps", steps);
+            result.set("steps", steps);
             result.put("snapshotName", snapshotName);
             
         } catch (Exception e) {
             log.error("Backup and restore process failed: {}", e.getMessage(), e);
             result.put("code", 500);
             result.put("message", "Process execution failed: " + e.getMessage());
-            result.put("steps", steps);
+            result.set("steps", steps);
         }
 
         return result;
     }
 
-    private JSONObject createStepResult(String stepName, JSONObject result) {
-        JSONObject step = new JSONObject();
+    private ObjectNode createStepResult(String stepName, ObjectNode result) {
+        ObjectNode step = objectMapper.createObjectNode();
         step.put("step", stepName);
-        step.put("code", result.getIntValue("code"));
-        step.put("message", result.getString("message"));
+        step.put("code", result.get("code").asInt());
+        step.put("message", result.get("message").asText());
         step.put("timestamp", System.currentTimeMillis());
         return step;
-    }
-
-    private JSONObject errorResponse(String message) {
-        JSONObject error = new JSONObject();
-        error.put("code", 500);
-        error.put("message", message);
-        return error;
     }
 }
